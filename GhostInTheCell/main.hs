@@ -39,7 +39,9 @@ instance Show Move where
 bestMove :: Map Int (Map Int Int) -> [Factory] -> [Troop] -> [Move] -> Move
 bestMove _ _ _ [] = Move WAIT 0 0 0
 bestMove graph factories troops moves =
-    List.minimumBy (\ m1 m2 -> if factoryCyborgs (factories !! moveDst m1) > factoryCyborgs (factories !! moveDst m2) then GT else LT) moves
+    List.minimumBy (\ m1 m2 -> if factoryCyborgs (factories !! moveDst m1) > factoryCyborgs (factories !! moveDst m2)
+                               then GT
+                               else LT) moves
 
 neighbors :: Map Int (Map Int Int) -> Int -> [Int]
 neighbors graph src = keys (graph ! src)
@@ -50,16 +52,21 @@ generateMovesFromSrc factories troops src =
 
 generateMoves :: Map Int (Map Int Int) -> [Factory] -> [Troop] -> [Move]
 generateMoves graph factories troops = do
-    let validSrcs = Prelude.filter (\ f -> factoryOwner f == 1 && factoryCyborgs f > 1) factories
-    let srcIds = Prelude.map factoryId validSrcs
-    Prelude.foldl (\ moves src ->
-        generateMovesFromSrc factories troops src (neighbors graph src) ++ moves) [] srcIds
+    let sources = Prelude.filter (\ f -> factoryOwner f == 1 && factoryCyborgs f > 1) factories
+    let validSrcIds = Prelude.map factoryId sources
+    Prelude.foldl (\ moves src -> do
+        let destinations = neighbors graph src
+        let validDstIds = List.filter (\ dst -> factoryOwner (factories!!dst) /= 1) destinations
+        generateMovesFromSrc factories troops src validDstIds ++ moves) [] validSrcIds
 
--- TODO fix this function
 graphDoubleLink :: Map Int (Map Int Int) -> Int -> Int -> Int -> Map Int (Map Int Int)
 graphDoubleLink graph s d v = do
-    let g = Map.insert s (Map.insert d v (graph ! s)) graph  -- TODO Error inserting value in missing sub-graph
-    Map.insert d (Map.insert s v (graph ! s)) g  -- TODO Handle cases of empty graph vs initialized graph
+    let g = if member s graph
+            then Map.insert s (Map.insert d v (graph ! s)) graph
+            else Map.insert s (Map.insert d v empty) graph
+    if member d g
+    then Map.insert d (Map.insert s v (g ! d)) g
+    else Map.insert d (Map.insert s v empty) g
 
 initGraph :: Int -> Map Int (Map Int Int) -> IO (Map Int (Map Int Int))
 initGraph 0 m = return m
@@ -69,29 +76,44 @@ initGraph n m = do
     if member (head link) m
     then initGraph (n - 1) (graphDoubleLink m (head link) (link!!1) (link!!2))
     else initGraph (n - 1) (graphDoubleLink empty (head link) (link!!1) (link!!2))
-    -- then initGraph (n - 1) (Map.insert (head link) (Map.insert (link !! 1) (link !! 2) (m ! head link)) m)
-    --else initGraph (n - 1) (Map.insert (head link) (Map.insert (link !! 1) (link !! 2) empty) m)
 
-readEntities :: [Factory] -> [Troop] -> Int -> IO ([Factory], [Troop])
-readEntities factories troops 0 = return (factories, troops)
-readEntities factories troops count = do
+readEntitiesMap :: Map Int Factory -> Map Int Troop -> Int -> IO (Map Int Factory, Map In Troop)
+readEntitiesMap factories troops 0 = return (factories, troops)
+readEntitiesMap factories troops count = do
     entityStr <- getLine
     let inputs = entityStr |> words
     let entityId = read (head inputs) :: Int
+    let entityType = inputs!!1
     let arg1 = read (inputs!!2) :: Int
     let arg2 = read (inputs!!3) :: Int
     let arg3 = read (inputs!!4) :: Int
     let arg4 = read (inputs!!5) :: Int
     let arg5 = read (inputs!!6) :: Int
-    if inputs!!1 == "FACTORY"
-    then readEntities (Factory entityId arg1 arg2 arg3 : factories) troops (count - 1)
-    else readEntities factories (Troop entityId arg1 arg2 arg3 arg4 arg5 : troops) (count - 1)
+    case entityType of
+        "FACTORY" -> readEntities (Map.insert entityId Factory entityId arg1 arg2 arg3 factories) troops (count - 1)
+        "TROOP" -> readEntities factories (Map.insert Troop entityId arg1 arg2 arg3 arg4 arg5 troops) (count - 1)
+
+--readEntities :: [Factory] -> [Troop] -> Int -> IO ([Factory], [Troop])
+--readEntities factories troops 0 = return (factories, troops)
+--readEntities factories troops count = do
+--    entityStr <- getLine
+--    let inputs = entityStr |> words
+--    let entityId = read (head inputs) :: Int
+--    let entityType = inputs!!1
+--    let arg1 = read (inputs!!2) :: Int
+--    let arg2 = read (inputs!!3) :: Int
+--    let arg3 = read (inputs!!4) :: Int
+--    let arg4 = read (inputs!!5) :: Int
+--    let arg5 = read (inputs!!6) :: Int
+--    if entityType == "FACTORY"
+--    then readEntities (Factory entityId arg1 arg2 arg3 : factories) troops (count - 1)
+--    else readEntities factories (Troop entityId arg1 arg2 arg3 arg4 arg5 : troops) (count - 1)
 
 gameLoop :: Map Int (Map Int Int) -> IO ()
 gameLoop graph = do
     entityCountStr <- getLine
     let entityCount = read entityCountStr :: Int
-    (factories, troops) <- readEntities [] [] entityCount
+    (factories, troops) <- readEntities empty empty entityCount
     let moves = generateMoves graph factories troops
     print (bestMove graph factories troops moves)
     gameLoop graph
