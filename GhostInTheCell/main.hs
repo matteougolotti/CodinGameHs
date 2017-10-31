@@ -50,7 +50,6 @@ generateMovesFromSrc :: Map Int Factory -> Map Int Troop -> Int -> [Int] -> [Mov
 generateMovesFromSrc factories troops src = 
     Prelude.foldl (\ moves dst -> (Move MOVE src dst 1 : moves)) []
 
--- Fix from this function
 generateMoves :: Map Int (Map Int Int) -> Map Int Factory -> Map Int Troop -> [Move]
 generateMoves graph factories troops = do
     let sources = Map.filter (\ f -> factoryOwner f == 1 && factoryCyborgs f > 1) factories
