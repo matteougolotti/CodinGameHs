@@ -52,7 +52,7 @@ generateMovesFromSrc factories troops src =
 
 generateMoves :: Map Int (Map Int Int) -> Map Int Factory -> Map Int Troop -> [Move]
 generateMoves graph factories troops = do
-    let sources = Map.filter (\ f -> factoryOwner f == 1 && factoryCyborgs f > 1) factories
+    let sources = Map.filter (\ f -> factoryOwner f == 1 && factoryCyborgs f > 9) factories
     let validSrcIds = Prelude.map factoryId (elems sources)
     Prelude.foldl (\ moves src -> do
         let destinations = neighbors graph src
