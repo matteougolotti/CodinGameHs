@@ -36,27 +36,28 @@ instance Show Move where
         MOVE -> "MOVE " ++ show (moveSrc m) ++ " " ++ show (moveDst m) ++ " " ++ show (moveCyborgs m)
         WAIT -> "WAIT"
 
-bestMove :: Map Int (Map Int Int) -> [Factory] -> [Troop] -> [Move] -> Move
+bestMove :: Map Int (Map Int Int) -> Map Int Factory -> Map Int Troop -> [Move] -> Move
 bestMove _ _ _ [] = Move WAIT 0 0 0
 bestMove graph factories troops moves =
-    List.minimumBy (\ m1 m2 -> if factoryCyborgs (factories !! moveDst m1) > factoryCyborgs (factories !! moveDst m2)
+    List.minimumBy (\ m1 m2 -> if factoryCyborgs (factories ! moveDst m1) > factoryCyborgs (factories ! moveDst m2)
                                then GT
                                else LT) moves
 
 neighbors :: Map Int (Map Int Int) -> Int -> [Int]
 neighbors graph src = keys (graph ! src)
 
-generateMovesFromSrc :: [Factory] -> [Troop] -> Int -> [Int] -> [Move]
+generateMovesFromSrc :: Map Int Factory -> Map Int Troop -> Int -> [Int] -> [Move]
 generateMovesFromSrc factories troops src = 
     Prelude.foldl (\ moves dst -> (Move MOVE src dst 1 : moves)) []
 
-generateMoves :: Map Int (Map Int Int) -> [Factory] -> [Troop] -> [Move]
+-- Fix from this function
+generateMoves :: Map Int (Map Int Int) -> Map Int Factory -> Map Int Troop -> [Move]
 generateMoves graph factories troops = do
-    let sources = Prelude.filter (\ f -> factoryOwner f == 1 && factoryCyborgs f > 1) factories
-    let validSrcIds = Prelude.map factoryId sources
+    let sources = Map.filter (\ f -> factoryOwner f == 1 && factoryCyborgs f > 1) factories
+    let validSrcIds = Prelude.map factoryId (elems sources)
     Prelude.foldl (\ moves src -> do
         let destinations = neighbors graph src
-        let validDstIds = List.filter (\ dst -> factoryOwner (factories!!dst) /= 1) destinations
+        let validDstIds = List.filter (\ dst -> factoryOwner (factories!dst) /= 1) destinations
         generateMovesFromSrc factories troops src validDstIds ++ moves) [] validSrcIds
 
 graphDoubleLink :: Map Int (Map Int Int) -> Int -> Int -> Int -> Map Int (Map Int Int)
@@ -77,9 +78,9 @@ initGraph n m = do
     then initGraph (n - 1) (graphDoubleLink m (head link) (link!!1) (link!!2))
     else initGraph (n - 1) (graphDoubleLink empty (head link) (link!!1) (link!!2))
 
-readEntitiesMap :: Map Int Factory -> Map Int Troop -> Int -> IO (Map Int Factory, Map In Troop)
-readEntitiesMap factories troops 0 = return (factories, troops)
-readEntitiesMap factories troops count = do
+readEntities :: Map Int Factory -> Map Int Troop -> Int -> IO (Map Int Factory, Map Int Troop)
+readEntities factories troops 0 = return (factories, troops)
+readEntities factories troops count = do
     entityStr <- getLine
     let inputs = entityStr |> words
     let entityId = read (head inputs) :: Int
@@ -90,24 +91,8 @@ readEntitiesMap factories troops count = do
     let arg4 = read (inputs!!5) :: Int
     let arg5 = read (inputs!!6) :: Int
     case entityType of
-        "FACTORY" -> readEntities (Map.insert entityId Factory entityId arg1 arg2 arg3 factories) troops (count - 1)
-        "TROOP" -> readEntities factories (Map.insert Troop entityId arg1 arg2 arg3 arg4 arg5 troops) (count - 1)
-
---readEntities :: [Factory] -> [Troop] -> Int -> IO ([Factory], [Troop])
---readEntities factories troops 0 = return (factories, troops)
---readEntities factories troops count = do
---    entityStr <- getLine
---    let inputs = entityStr |> words
---    let entityId = read (head inputs) :: Int
---    let entityType = inputs!!1
---    let arg1 = read (inputs!!2) :: Int
---    let arg2 = read (inputs!!3) :: Int
---    let arg3 = read (inputs!!4) :: Int
---    let arg4 = read (inputs!!5) :: Int
---    let arg5 = read (inputs!!6) :: Int
---    if entityType == "FACTORY"
---    then readEntities (Factory entityId arg1 arg2 arg3 : factories) troops (count - 1)
---    else readEntities factories (Troop entityId arg1 arg2 arg3 arg4 arg5 : troops) (count - 1)
+        "FACTORY" -> readEntities (Map.insert entityId (Factory entityId arg1 arg2 arg3) factories) troops (count - 1)
+        "TROOP" -> readEntities factories (Map.insert entityId (Troop entityId arg1 arg2 arg3 arg4 arg5) troops) (count - 1)
 
 gameLoop :: Map Int (Map Int Int) -> IO ()
 gameLoop graph = do
